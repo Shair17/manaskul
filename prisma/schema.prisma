@@ -1,0 +1,116 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Modelos de NextAuth para autenticación
+model Account {
+  id                       String  @id @default(cuid())
+  userId                   String
+  type                     String
+  provider                 String
+  providerAccountId        String
+  refresh_token            String? @db.Text
+  access_token             String? @db.Text
+  expires_at               Int?
+  token_type               String?
+  scope                    String?
+  id_token                 String? @db.Text
+  session_state            String?
+  user                     User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refresh_token_expires_in Int?
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id            String       @id @default(cuid())
+  name          String?
+  email         String?      @unique
+  emailVerified DateTime?
+  image         String?
+  accounts      Account[]
+  sessions      Session[]
+  role          Role         @default(Admin)
+  coursesTaken  Enrollment[] // Cursos en los que el usuario está inscrito (como estudiante)
+  coursesTaught Course[] // Cursos que el usuario enseña (como docente)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+enum Role {
+  Admin
+  Student
+  Instructor
+}
+
+// Programa de estudio (Teología, Adoración, etc.)
+model Program {
+  id      String   @id @default(cuid())
+  name    String   @unique
+  courses Course[]
+}
+
+// Cursos ofrecidos dentro de un programa
+model Course {
+  id          String       @id @default(cuid())
+  name        String
+  credits     Int
+  hours       Int
+  semester    String       @unique
+  mode        CourseMode // Modalidad del curso (presencial, híbrida, virtual)
+  programId   String
+  program     Program      @relation(fields: [programId], references: [id], onDelete: Cascade)
+  teacherId   String
+  teacher     User         @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  enrollments Enrollment[] // Relación con los estudiantes inscritos
+}
+
+// Modalidades del curso
+enum CourseMode {
+  OnSite
+  Hybrid
+  Online
+}
+
+// Relación entre estudiantes y cursos
+model Enrollment {
+  id        String  @id @default(cuid())
+  courseId  String
+  course    Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  studentId String
+  student   User    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  grades    Grade[] // Notas del estudiante en este curso
+
+  @@unique([courseId, studentId]) // Un estudiante no puede inscribirse dos veces en el mismo curso
+}
+
+// Notas de un estudiante en un curso
+model Grade {
+  id           String     @id @default(cuid())
+  enrollmentId String
+  enrollment   Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  unit         Int // Unidad de la nota (1, 2, 3)
+  score        Float // Puntuación obtenida, permite decimales y se valida entre 0 y 20
+
+  // @@check(score >= 0 AND score <= 20) // Validación del rango de la nota
+  @@unique([enrollmentId, unit]) // Un estudiante solo puede tener una nota por unidad
+}
